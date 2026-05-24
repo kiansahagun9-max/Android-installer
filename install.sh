@@ -22,29 +22,52 @@ wget -O /tmp/android.iso https://sourceforge.net/projects/android-x86/files/Rele
 
 # Step 2: Install dependencies
 echo -e "${YELLOW}[2/5] Installing dependencies...${NC}"
-apt update && apt install -y grub2 xorriso
+apt update && apt install -y grub2 xorriso wget
 
-# Step 3: Extract ISO
-echo -e "${YELLOW}[3/5] Extracting Android ISO...${NC}"
-mkdir -p /mnt/android
-mount -o loop /tmp/android.iso /mnt/android
-cp -r /mnt/android/* /mnt/android-install/
-umount /mnt/android
+# Step 3: Format and partition disk
+echo -e "${YELLOW}[3/5] Formatting disk...${NC}"
+echo -e "${RED}WARNING: This will erase all data on /dev/sda!${NC}"
+sleep 3
 
-# Step 4: Install Android to disk
+# Create partition table
+parted /dev/sda mklabel gpt
+parted /dev/sda mkpart primary ext4 1MiB 100%
+mkfs.ext4 /dev/sda1
+
+# Step 4: Install Android
 echo -e "${YELLOW}[4/5] Installing Android to disk...${NC}"
-mkdir -p /mnt/android-system
-mount /dev/sda1 /mnt/android-system
-cp -r /mnt/android-install/* /mnt/android-system/
-umount /mnt/android-system
+mkdir -p /mnt/android
+mount /dev/sda1 /mnt/android
 
-# Step 5: Install VNC server
+# Extract ISO
+mkdir -p /tmp/iso
+mount -o loop /tmp/android.iso /tmp/iso
+cp -r /tmp/iso/* /mnt/android/
+umount /tmp/iso
+
+# Install GRUB
+grub-install --target=i386-pc /dev/sda
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# Step 5: Install VNC server (para sa RealVNC app)
 echo -e "${YELLOW}[5/5] Installing VNC server...${NC}"
-apt install -y tightvncserver
+apt install -y tightvncserver xfce4 xfce4-goodies
+
+# Setup VNC
+mkdir -p /root/.vnc
+echo "12345678" | vncpasswd -f > /root/.vnc/passwd
+chmod 600 /root/.vnc/passwd
+
+# Start VNC server
 vncserver :1 -geometry 1280x720 -depth 24
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   Installation Complete!${NC}"
-echo -e "${GREEN}   Connect via VNC: [IP]:5901${NC}"
-echo -e "${GREEN}   Password: 12345678${NC}"
 echo -e "${GREEN}========================================${NC}"
+echo -e "${YELLOW}IMPORTANT:${NC}"
+echo -e "1. Reboot: ${GREEN}reboot${NC}"
+echo -e "2. Wait 2-3 mins for Android to boot"
+echo -e "3. Boot again to Rescue Mode"
+echo -e "4. Run: ${GREEN}vncserver :1 -geometry 1280x720 -depth 24${NC}"
+echo -e "5. Open RealVNC app → ${GREEN}[IP_VPS]:5901${NC}"
+echo -e "6. Password: ${GREEN}12345678${NC}"
