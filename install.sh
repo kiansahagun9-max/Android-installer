@@ -1,44 +1,50 @@
 #!/bin/bash
-# Android-x86 Auto Installer
-# Gaya ng bin456 style!
 
-ISO_URL="https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download"
-DISK="/dev/sda"
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-echo "📥 Downloading Android-x86 ISO..."
-wget -O /tmp/android.iso $ISO_URL
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}   Android-x86 + VNC Auto Installer${NC}"
+echo -e "${GREEN}========================================${NC}"
 
-echo "💾 Preparing disk..."
-# I-unmount muna lahat
-umount /dev/sda1 /dev/sda14 /dev/sda15 /dev/sda16 2>/dev/null
-swapoff /dev/sda15 2>/dev/null
+# Check if root
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Please run as root!${NC}"
+  exit 1
+fi
 
-# I-delete lahat ng partitions
-for i in 1 14 15 16; do
-    echo -e "d\n$i\n" | fdisk $DISK 2>/dev/null
-done
-echo -e "d\nw\n" | fdisk $DISK 2>/dev/null
+# Step 1: Download Android-x86
+echo -e "${YELLOW}[1/5] Downloading Android-x86 9.0...${NC}"
+wget -O /tmp/android.iso https://sourceforge.net/projects/android-x86/files/Release%209.0/android-x86_64-9.0-r2.iso/download
 
-# Gumawa ng bagong partition
-echo -e "n\np\n1\n\n\n\na\nw\n" | fdisk $DISK
+# Step 2: Install dependencies
+echo -e "${YELLOW}[2/5] Installing dependencies...${NC}"
+apt update && apt install -y grub2 xorriso
 
-echo "🔨 Formatting..."
-mkfs.ext4 -F ${DISK}1
+# Step 3: Extract ISO
+echo -e "${YELLOW}[3/5] Extracting Android ISO...${NC}"
+mkdir -p /mnt/android
+mount -o loop /tmp/android.iso /mnt/android
+cp -r /mnt/android/* /mnt/android-install/
+umount /mnt/android
 
-echo "📂 Installing Android..."
-mkdir -p /mnt/iso /mnt/target
-mount -o loop /tmp/android.iso /mnt/iso
-mount ${DISK}1 /mnt/target
-cp -r /mnt/iso/* /mnt/target/
+# Step 4: Install Android to disk
+echo -e "${YELLOW}[4/5] Installing Android to disk...${NC}"
+mkdir -p /mnt/android-system
+mount /dev/sda1 /mnt/android-system
+cp -r /mnt/android-install/* /mnt/android-system/
+umount /mnt/android-system
 
-echo "🔧 Installing GRUB..."
-mount --bind /dev /mnt/target/dev
-mount --bind /proc /mnt/target/proc
-mount --bind /sys /mnt/target/sys
-chroot /mnt/target /bin/bash -c "grub-install $DISK && update-grub"
+# Step 5: Install VNC server
+echo -e "${YELLOW}[5/5] Installing VNC server...${NC}"
+apt install -y tightvncserver
+vncserver :1 -geometry 1280x720 -depth 24
 
-echo "🧹 Cleaning up..."
-umount /mnt/target/dev /mnt/target/proc /mnt/target/sys /mnt/target /mnt/iso
-
-echo "✅ Android-x86 installed! Rebooting..."
-reboot
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}   Installation Complete!${NC}"
+echo -e "${GREEN}   Connect via VNC: [IP]:5901${NC}"
+echo -e "${GREEN}   Password: 12345678${NC}"
+echo -e "${GREEN}========================================${NC}"
